@@ -1,0 +1,393 @@
+---
+title: "Final Consulting Code"
+author: "Michelle Nesbit"
+date: "2022-12-05"
+output: html_document
+---
+We import and explore the first dataset. There are 61 columns and 1704 rows. 4 columns (2, 12, 22, 50)  are empty. They are just column subsection titles: DEMOGRAPHICS, INFO.ABOUT.SURGERY, CO.MORBIDITIES....COVID.STATUS. so we will remove them. Noticing tail of dataset has 7 rows containing summary information and not unique observations. We will remove those rows.
+```{r}
+med1 <- read.csv(file = '~/Desktop/med1data.csv')
+tail(med1)
+med1<-med1[-c(2,12,22,50)]
+med1<-med1[-c(1698:1704), ]
+# Replace (null) with NA
+library(dplyr)
+med1 <- med1 %>% replace(.=="(null)", NA)
+max(med1$weight)
+# Weigh values are in the thousands. Client is not sure how this column was calculated, and recommends using BMI and omitting height and weight.
+med1<-med1[-c(7,8)]
+# There will correlation between date of birth and age so we remove date of birth from dataset.
+med1<-med1[-2]
+# There will be correlation between length of stay and admission, surgery, and discharge dates. 
+# We notice there is no covid diagnosis date to analyze research question 2. 
+# Informed client and professor about this lack of data, and our decision to keep length of stay and omit other date variables. Four more columns with dates have a lot of missingness. We will also remove those from the dataframe. They are first_dvt_hx, first_pe_hx, and te_first_date, readmit_date.
+# head(is.na(med1))
+med1<-med1[-c(12:14, 42:43, 49, 51)]
+# Find NA counts for each column. Will remove ed_90d_reason and readmit_primary_dx as missingness is over 90% for both columns.   
+na_count <-sapply(med1, function(y) sum(length(which(is.na(y)))))
+na_ed_90d_reason<-(1589/1697)
+na_readmit_primary_dx<-(1608/1697)
+na_ed_90d_reason
+na_readmit_primary_dx
+med1<-med1[-c(45, 47)]
+# all Open.procedure..1.yes..0.no. are 1=yes so we are removing column
+length(med1$Open.procedure..1.yes..0.no.==1)
+med1<-med1[-c(11)]
+# Will need to impute 2 values for race, 190 for BMI, 10 for Length.of.Stay, and 49 for discharge_disposition
+#head(med1)
+
+# removing because second dataset does not contain: Surgery, Trauma..1.yes..0.no. (cols 9 & 10)  
+med1<-med1[-c(9,10)]
+#rename columns to match next dataset
+library(dplyr)
+med1 <- med1 %>% 
+  rename(
+    mrn = Patient.number,
+    bmi = BMI,
+    ins = Insurance,
+    cpt = cpt..surgery.code.,
+    los = Length.of.Stay,
+    dis  = discharge_disposition,
+    mal = Malignancy..cancer.
+    )
+# all unique obs
+Uniq1<-length(unique(med1$mrn))
+```
+
+Importing and exploring second dataset. Removing X column that just contains NA values. Will remove same unnecessary columns as we did from the first dataset including dob, ht, wt admit_date, and disch_date.
+```{r}
+med2 <- read.csv(file = '~/Desktop/med2data.csv')
+med2 <- med2 %>% replace(.=="(null)", NA)
+na_count <-sapply(med2, function(y) sum(length(which(is.na(y)))))
+na_count
+# over 90% missingness in first_dvt_hx so will remove along with the following columns which has even more missingness: X,  first_pe_hx, te_first_date, readmit_date, readmit_primary_dx, ed_90d_reason. These columns were removed from med1 for same reason.
+na_first_dvt_hx<-(4576/4923)
+head(med2)
+med2<-med2[-c(2:3, 8:9, 14:15, 43:44, 50, 52:53, 55)]
+```
+
+Need to leave surgery date here to deal with replicates we were informed of 
+Check for replicates: 3460 unique mrns, 1463 replicates
+```{r}
+Uniq<-length(unique(med2$mrn))
+Dup<-(length(med2$mrn)-Uniq)
+```
+
+Restructing surgery_date so we can pull earliest observation per client's instruction to deal with replicates
+```{r}
+med2$surgery_date <- gsub(x=med2$surgery_date,pattern=" 0:00",replacement="",fixed=T)
+med2$surgery_date <- strptime(as.character(med$surgery_date), "%m/%d/%Y")
+med2$surgery_date <- gsub(x=med2$surgery_date,pattern="-",replacement="",fixed=T)
+# Earliest observation will now have the smallest surgery_date value code=surgery date=mrn
+library(tidyverse)
+med2$surgery_date<-as.numeric(med2$surgery_date)
+med2 <- med2 %>% 
+  group_by(mrn) %>%       # group the rows by 'mrn'
+  slice_min(surgery_date,  # keep row per group with min surgery_date value 
+            n = 1,         # keep only the single earliest date/ smallest value 
+            with_ties = F) # if there's a tie (of date), take the first row
+```
+Removing surgery_date now so we can merge with med1 dataset. Some column titles are different compared to the first dataset. We will make them the same to ensure they merge properly.
+```{r}
+med2<-med2[-c(9)]
+
+med2 <- med2 %>% 
+  rename(ins = financial_class,
+         dis = disch_disp,
+         mal = Malignancy)
+```
+
+Combine datasets and check values of individual columns. Sex has only accurate entries (i.e. 2 levels)
+```{r}
+CBCP <- rbind(med1, med2)
+table(CBCP$sex)
+```
+
+Data Cleaning
+```{r}
+table(CBCP$race) # Black, Other over 1000 obs each, White 3955 obs, yet 10 factor levels. Need to combine to help balance the data. 
+CBCP$race[c(CBCP$race=="American Indian")]<-"Other"
+CBCP$race[c(CBCP$race=="Asian")]<-"Other"
+CBCP$race[c(CBCP$race=="Hispanic")]<-"Other"
+CBCP$race[c(CBCP$race=="Multiracial")]<-"Other"
+CBCP$race[c(CBCP$race=="Native Hawaiian and other Pacific Islander")]<-"Other"
+CBCP$race[c(CBCP$race=="Preference not indicated")]<-"Other"
+CBCP$race[c(CBCP$race=="Unknown")]<-"Other"
+
+table(CBCP$ethnicity) # 4 levels prefer not to answer and unknown need to be reassigned. Assigning to Hispanic to avoid making data more unbalanced
+CBCP$ethnicity[c(CBCP$ethnicity=="Prefers not to answer")]<-"Hispanic Origin"
+CBCP$ethnicity[c(CBCP$ethnicity=="Unknown")]<-"Hispanic Origin"
+
+table(CBCP$ins) # Combine levels to balance data
+CBCP$ins[c(CBCP$ins=="Tricare LUHS")]<-"Other"
+CBCP$ins[c(CBCP$ins=="Institutional")]<-"Other"
+CBCP$ins[c(CBCP$ins=="Insurance")]<-"Other"
+CBCP$ins[c(CBCP$ins=="Worker's Comp")]<-"Other"
+CBCP$ins[c(CBCP$ins=="Medicaid Pending")]<-"Other"
+CBCP$ins[c(CBCP$ins=="MMAI")]<-"Other"
+```
+
+```{r}
+#table(CBCP$dis) # many similar levels are being collapsed
+CBCP$dis[c(CBCP$dis=="AGAINST MEDICAL ADVICE - HIM")]<-"Home"
+CBCP$dis[c(CBCP$dis=="AGAINST MEDICAL ADVICE WITH FORM SIGNED")]<-"Home"
+CBCP$dis[c(CBCP$dis=="AGAINST MEDICAL ADVICE WITHOUT FORM SIGNED")]<-"Home"
+CBCP$dis[c(CBCP$dis=="Disch/Transfer to Court/Law Enforcement")]<-"Home"
+CBCP$dis[c(CBCP$dis=="HOME")]<-"Home"
+
+CBCP$dis[c(CBCP$dis=="DISCHARGE TO ANY INPATIENT REHABILITATION FACILITY (IRF)")]<-"Rehab"
+CBCP$dis[c(CBCP$dis=="DC/TR to  Inpt Rehab Facility (IRF) including rehab unit  planned acute  Inpt readmit ")]<-"Rehab"
+CBCP$dis[c(CBCP$dis=="DC/TR to federal health care facility with planned acute Inpt  Readmit")]<-"Rehab"
+CBCP$dis[c(CBCP$dis=="DC/TR to  Inpt Rehab Facility (IRF) including rehab unit  planned acute  Inpt readmit")]<-"Rehab"
+
+CBCP$dis[c(CBCP$dis=="DC/TR to short term general hospital for inpatient care.")]<-"Hospital"
+CBCP$dis[c(CBCP$dis=="DC/TR to Medicare  long term care hosp (LTCH) with planned acute IP Readmit")]<-"Hospital"
+CBCP$dis[c(CBCP$dis=="DC/TR to short term general hospital for inpatient care.")]<-"Hospital"
+CBCP$dis[c(CBCP$dis=="FEDERAL HOSPITAL (VA)")]<-"Hospital"
+CBCP$dis[c(CBCP$dis=="STILL IN HOSPITAL")]<-"Hospital"
+CBCP$dis[c(CBCP$dis=="ANOTHER SHORT TERM HOSPITAL")]<-"Hospital"
+CBCP$dis[c(CBCP$dis=="DISCHARGED TO PSYCHIATRIC HOSPITAL OR DISTINCT PART PSYCHIATRIC UNIT")]<-"Hospital"
+CBCP$dis[c(CBCP$dis=="DISCHARGED TO A LONG TERM CARE HOSPITAL (LTCH)")]<-"Hospital"
+
+CBCP$dis[c(CBCP$dis=="EXPIRED IN A MEDICAL FACILITY")]<-"Deceased"
+CBCP$dis[c(CBCP$dis=="EXPIRED/DECEASED")]<-"Deceased"
+
+CBCP$dis[c(CBCP$dis=="DISCHARGE TO HOSPICE - MEDICAL FACILITY")]<-"SKILLED NURSING FACILITY"
+CBCP$dis[c(CBCP$dis=="DC/TR to another type of HC Inst not defined elsewhere")]<-"SKILLED NURSING FACILITY"
+CBCP$dis[c(CBCP$dis=="SKILLED NURSING FACILITY")]<-"Nursing Home"
+CBCP$dis[c(CBCP$dis=="HOME HEALTH SERVICE")]<-"Home Health Service"
+```
+
+Collapsing more variables
+```{r}
+#combining diabetes with or without complications into one column
+CBCP$Diabetes<-CBCP$Diabetes_cc + CBCP$Diabetes_no_cc
+CBCP$Diabetes<-ifelse(CBCP$Diabetes == 0, 0, 1)
+
+#deleting CBCP$Diabetes_cc + CBCP$Diabetes_no_cc
+CBCP<-CBCP[-c(17:18)]
+
+#combining mild or moderate liver disease into one column
+CBCP$LiverDis<-CBCP$Mild_Liver + CBCP$Moderate_Liver
+CBCP$LiverDis<-ifelse(CBCP$LiverDis == 0, 0, 1)
+
+#deleting CBCP$Mild_Liver + CBCP$Moderate_Liver
+CBCP<-CBCP[-c(19:20)]
+
+#deleting dvt_le, dvt_le_proximal, and dvt_le_distal because they're all correlated with dvt
+cor(CBCP[, c("dvt", "dvt_le", "dvt_le_proximal", "dvt_le_distal")])
+CBCP<-CBCP[-c(34:36)]
+
+#combining dvt and pe to make a te column
+CBCP$te<-CBCP$dvt + CBCP$pe
+CBCP$te<-ifelse(CBCP$te == 0, 0, 1)
+
+#change column order so most important variables are easy to see
+CBCP<-CBCP[,c(29, 32:33, 38, 1:28, 30:31, 34:37)]
+
+#putting comorbidities back in that section
+CBCP<-CBCP[,c(1:32, 37:38,33:36)]
+```
+
+Impute missing values: race 2, bmi 670, los 17, dis 499
+```{r}
+na_count <-sapply(CBCP, function(y) sum(length(which(is.na(y)))))
+na_count
+
+CBCP <- CBCP %>% mutate_if(is.integer, as.numeric)
+CBCP$dvt_hx<-as.numeric(CBCP$dvt_hx)
+
+library(dplyr)
+CBCP <- CBCP %>% mutate_at(c('age', 'bmi', 'los'), as.numeric)
+CBCP <- CBCP %>% mutate_at(c('sex', 'race', 'ethnicity', 'ins', 'dis'), as.factor)
+
+str(CBCP)
+
+library(mice)
+init = mice(CBCP, maxit=0) 
+meth = init$method
+predM = init$predictorMatrix
+
+predM[, c("mrn", "cpt")]=0 #removing these as predictors
+
+meth[c("race")]="polyreg"
+meth[c("dis")]="polyreg"
+meth[c("bmi")]="pmm"
+meth[c("los")]="pmm"
+
+set.seed(103)
+imputed = mice(CBCP, method=meth, predictorMatrix=predM, m=5)
+
+imputed <- complete(imputed)
+CBCP<-as.data.frame(imputed) #successfully imputed values and now we have a complete dataset
+```
+
+Exploratory Data Analysis
+
+
+Percentages of patients with covid_19, dvt, pe, or te
+```{r}
+#217 of 5157 or 4.107873% diagnosed with covid_19
+table(CBCP$covid_19)
+covidproportions <- table(CBCP$covid_19)/length(CBCP$covid_19)
+covidpercentages <- covidproportions*100
+print(covidpercentages)
+
+#168 of 5157 or 3.257708% have dvt
+table(CBCP$dvt)
+dvtproportions <- table(CBCP$dvt)/length(CBCP$dvt)
+dvtpercentages <- dvtproportions*100
+print(dvtpercentages)
+
+# 62 of 5157 or 1.202249% have pe
+table(CBCP$pe)
+peproportions <- table(CBCP$pe)/length(CBCP$pe)
+pepercentages <- peproportions*100
+print(pepercentages)
+
+# 205 of 5157 or 3.975179% have te
+table(CBCP$te)
+peproportions <- table(CBCP$te)/length(CBCP$te)
+tepercentages <- peproportions*100
+print(tepercentages)
+```
+
+Contingency tables
+```{r}
+par(mfrow=c(1,2))
+ConTabledvt<-table(CBCP$covid_19, CBCP$dvt)
+dimnames(ConTabledvt) = list(DVT = c("No","Yes"), Covid19 = c("No","Yes"))
+print(ConTabledvt)
+mosaicplot(ConTabledvt, main = "Covid and DVT", color = 'deepskyblue')
+
+ConTablepe<-table(CBCP$covid_19, CBCP$pe)
+dimnames(ConTablepe) = list(PE = c("No", "Yes"), Covid19 = c("No", "Yes"))
+print(ConTablepe)
+mosaicplot(ConTablepe, main = "Covid and PE", color = 'firebrick2')
+
+ConTablete<-table(CBCP$covid_19, CBCP$te)
+dimnames(ConTablete) = list(TE = c("No", "Yes"), Covid19 = c("No", "Yes"))
+print(ConTablete)
+mosaicplot(ConTablete, main = "Covid and TE", color = 'darkgreen')
+```
+
+Hypothesis Testing
+```{r}
+#Chi-sq tests Ho: pe appear to be independent, but getting a warning chi-squared approximation may be incorrect
+chisq.test(CBCP$covid_19, CBCP$pe)
+chisq.test(CBCP$covid_19, CBCP$dvt) # reject independence at alpha=0.05 level
+chisq.test(CBCP$covid_19, CBCP$te) # reject independence at alpha=0.05 level
+
+#Expected values in Yes/Yes cell too small according to???
+chisq.test(CBCP$covid_19, CBCP$pe)$expected #2.6
+chisq.test(CBCP$covid_19, CBCP$dvt)$expected #7.07
+chisq.test(CBCP$covid_19, CBCP$te)$expected #8.63
+
+#Testing independence with fishers test. Output is giving us odds ratios we should interpret.
+fisher.test(ConTabledvt) # reject proportions of dvt are the same among those who have and have not had covid_19
+fisher.test(ConTablepe) #fail to reject true odds ratio is 1
+fisher.test(ConTablete) # odds ratio is 2 so odds of having te for someone diagnosed with covid is 2 times higher than someone who hasn't been diagnosed with covid_19
+```
+
+Demographics
+```{r}
+#contingency table for pe and covid by sex, ethnicity, and race
+contable.pe.sex <-table(CBCP$covid_19, CBCP$pe, CBCP$sex)
+dimnames(contable.pe.sex) = list(Sex = c("Male", "Female"), Covid19 = c("No","Yes"), PE = c("No","Yes"))
+ftable(contable.pe.sex)
+
+contable.pe.ethnic <- table(CBCP$pe, CBCP$ethnicity, CBCP$covid_19)
+dimnames(contable.pe.ethnic) = list(PE = c("No","Yes"), Ethnicity = c("Hispanic","Non-Hispanic"), Covid19 =c("No","Yes"))
+ftable(contable.pe.ethnic)
+
+contable.pe.race <- table(CBCP$pe, CBCP$race, CBCP$covid_19)
+dimnames(contable.pe.race) = list(PE = c("No","Yes"), Race = c("Black","Other", "White"), Covid19 =c("No","Yes"))
+ftable(contable.pe.race)
+
+#contingency table for dvt and covid by sex, ethnicity, and race
+contable.dvt.sex <-table(CBCP$covid_19, CBCP$dvt, CBCP$sex)
+dimnames(contable.dvt.sex) = list(Sex = c("Male", "Female"), Covid19 = c("No","Yes"), DVT = c("No","Yes"))
+ftable(contable.dvt.sex)
+
+contable.dvt.ethnic <- table(CBCP$dvt, CBCP$ethnicity, CBCP$covid_19)
+dimnames(contable.dvt.ethnic) = list(DVT = c("No","Yes"), Ethnicity = c("Hispanic","Non-Hispanic"), Covid19 =c("No","Yes"))
+ftable(contable.dvt.ethnic)
+
+contable.dvt.race <- table(CBCP$dvt, CBCP$race, CBCP$covid_19)
+dimnames(contable.dvt.race) = list(DVT = c("No","Yes"), Race = c("Black","Other", "White"), Covid19 =c("No","Yes"))
+ftable(contable.dvt.race)
+
+#contingency table for te and covid by sex, ethnicity, and race
+contable.te.sex <-table(CBCP$covid_19, CBCP$te, CBCP$sex)
+dimnames(contable.te.sex) = list(Sex = c("Male", "Female"), Covid19 = c("No","Yes"), TE = c("No","Yes"))
+ftable(contable.te.sex)
+
+contable.te.ethnic <- table(CBCP$te, CBCP$ethnicity, CBCP$covid_19)
+dimnames(contable.te.ethnic) = list(TE = c("No","Yes"), Ethnicity = c("Hispanic","Non-Hispanic"), Covid19 =c("No","Yes"))
+ftable(contable.te.ethnic)
+
+contable.te.race <- table(CBCP$pe, CBCP$race, CBCP$covid_19)
+dimnames(contable.te.race) = list(TE = c("No","Yes"), Race = c("Black","Other", "White"), Covid19 =c("No","Yes"))
+ftable(contable.te.race)
+```
+
+EDA for continuous variables: age, bmi, los, cpt
+```{r}
+par(mfrow=c(3,2))
+hist(CBCP$age, col='mediumaquamarine') # looks fairly normal
+hist(CBCP$bmi, col='mediumaquamarine') # slight right skew
+hist(CBCP$cpt, col='mediumaquamarine') # right skew with some obs around 30000
+hist(CBCP$los, col='mediumaquamarine')
+hist(log(CBCP$los), col='mediumaquamarine')
+
+# SHOULD WE DO A LOG TRANSFORMATION? OR SHOULD WE EVEN INCLUDE THIS IN OUR MODEL
+```
+EDA on comorbidities and outcome measures
+```{r}
+library(dplyr)
+CBCP <- CBCP %>% 
+  rename(
+    cv=Cerebrovascular,
+    ulcer = Peptic_Ulcer,
+    meta= Metastatic
+)
+CBCP<- CBCP %>% relocate(pe_hx, dvt_hx, .after = te)
+CBCP<- CBCP %>% relocate(meta, .after = mal)
+CBCP<- CBCP %>% relocate(CHF, .after = MI)
+CBCP<- CBCP %>% relocate(COPD, .after = tobacco)
+CBCP<- CBCP %>% relocate(factor_v, .after = Hemiplegia)
+
+library(corrplot)
+co<-(CBCP[,c(1:6,17:38)])
+corrplot(cor(co),  method = "shade", tl.col = "black", type="upper", col.lim = c(-0.1,1), order='AOE')
+```
+
+```{r}
+library(ggplot2)
+plotdata<-data.frame(matrix(ncol=7, nrow=5157))
+x<-c("te", "covid_19", "dvt_hx", "PVD", "CHF", "CKD", "htn")
+colnames(plotdata)<-x
+
+plotdata$te<-factor(CBCP$te, labels= c("No te", "Yes te"))
+plotdata$covid_19<-factor(CBCP$covid_19, labels= c("No covid", "Yes covid"))
+plotdata$dvt_hx<-factor(CBCP$dvt_hx, labels= c("No dvt_hx", "Yes dvt_hx"))
+plotdata$PVD<-factor(CBCP$PVD, labels= c("No PVD", "Yes PVD"))
+plotdata$CHF<-factor(CBCP$CHF, labels= c("No CHF", "Yes CHF"))
+plotdata$CKD<-factor(CBCP$CKD, labels= c("No CKD", "Yes CKD"))
+plotdata$htn<-factor(CBCP$htn, labels= c("No htn", "Yes htn"))  
+
+ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cornflowerblue", stat="count") +
+  facet_grid(dvt_hx ~ covid_19) + labs(title = "te by dvt_hx and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+
+ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cyan4", stat="count") +
+  facet_grid(PVD ~ covid_19) + labs(title = "te by PVD and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+
+ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cornflowerblue", stat="count") +
+  facet_grid(CHF ~ covid_19) + labs(title = "te by CHF and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+
+ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cyan4", stat="count") +
+  facet_grid(CKD ~ covid_19) + labs(title = "te by CKD and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+
+ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cornflowerblue", stat="count") +
+  facet_grid(htn ~ covid_19) + labs(title = "te by htn and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+```
