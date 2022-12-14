@@ -20,16 +20,19 @@ med1<-med1[-c(7,8)]
 med1<-med1[-2]
 # There will be correlation between length of stay and admission, surgery, and discharge dates. 
 # We notice there is no covid diagnosis date to analyze research question 2. 
-# Informed client and professor about this lack of data, and our decision to keep length of stay and omit other date variables. Four more columns with dates have a lot of missingness. We will also remove those from the dataframe. They are first_dvt_hx, first_pe_hx, and te_first_date, readmit_date.
-# head(is.na(med1))
-med1<-med1[-c(12:14, 42:43, 49, 51)]
-# Find NA counts for each column. Will remove ed_90d_reason and readmit_primary_dx as missingness is over 90% for both columns.   
-na_count <-sapply(med1, function(y) sum(length(which(is.na(y)))))
-na_ed_90d_reason<-(1589/1697)
-na_readmit_primary_dx<-(1608/1697)
-na_ed_90d_reason
-na_readmit_primary_dx
-med1<-med1[-c(45, 47)]
+# Informed client and professor about this lack of data, and our decision to keep length of stay and omit other date variables. 
+
+# Find NA counts for each column. Will remove the following as missingness is over 90%: first_dvt_hx, first_pe_hx, te_first_date, readmit_date ed_90d_reason, and readmit_primary_dx.
+print(na_count <-sapply(med1, function(y) sum(length(which(is.na(y))))))
+print(na_first_dvt_hx<-(1559/1697))
+print(na_first_pe_hx<-(1639/1697))
+print(na_te_first_date<-(1618/1697))
+print(na_readmit_date<-(1608/1697))
+print(na_ed_90d_reason<-(1589/1697))
+print(na_readmit_primary_dx<-(1608/1697))
+
+med1<-med1[-c(12:14, 42:43, 49, 51:52, 54)]
+
 # all Open.procedure..1.yes..0.no. are 1=yes so we are removing column
 length(med1$Open.procedure..1.yes..0.no.==1)
 med1<-med1[-c(11)]
@@ -105,7 +108,7 @@ table(CBCP$sex)
 
 Data Cleaning
 ```{r}
-table(CBCP$race) # Black, Other over 1000 obs each, White 3955 obs, yet 10 factor levels. Need to combine to help balance the data. 
+table(CBCP$race) # Black, Other about 1000 obs each, White 3170 obs, yet 10 factor levels. Need to combine to help balance the data. 
 CBCP$race[c(CBCP$race=="American Indian")]<-"Other"
 CBCP$race[c(CBCP$race=="Asian")]<-"Other"
 CBCP$race[c(CBCP$race=="Hispanic")]<-"Other"
@@ -113,18 +116,18 @@ CBCP$race[c(CBCP$race=="Multiracial")]<-"Other"
 CBCP$race[c(CBCP$race=="Native Hawaiian and other Pacific Islander")]<-"Other"
 CBCP$race[c(CBCP$race=="Preference not indicated")]<-"Other"
 CBCP$race[c(CBCP$race=="Unknown")]<-"Other"
-
+table(CBCP$race)
 table(CBCP$ethnicity) # 4 levels prefer not to answer and unknown need to be reassigned. Assigning to Hispanic to avoid making data more unbalanced
 CBCP$ethnicity[c(CBCP$ethnicity=="Prefers not to answer")]<-"Hispanic Origin"
 CBCP$ethnicity[c(CBCP$ethnicity=="Unknown")]<-"Hispanic Origin"
+table(CBCP$ethnicity)
 
 table(CBCP$ins) # Combine levels to balance data
 CBCP$ins[c(CBCP$ins=="Tricare LUHS")]<-"Other"
 CBCP$ins[c(CBCP$ins=="Institutional")]<-"Other"
 CBCP$ins[c(CBCP$ins=="Insurance")]<-"Other"
-CBCP$ins[c(CBCP$ins=="Worker's Comp")]<-"Other"
 CBCP$ins[c(CBCP$ins=="Medicaid Pending")]<-"Other"
-CBCP$ins[c(CBCP$ins=="MMAI")]<-"Other"
+CBCP$ins[c(CBCP$ins=="Worker's Comp LUHS")]<-"Worker's Comp"
 ```
 
 ```{r}
@@ -339,8 +342,12 @@ hist(CBCP$bmi, col='mediumaquamarine') # slight right skew
 hist(CBCP$cpt, col='mediumaquamarine') # right skew with some obs around 30000
 hist(CBCP$los, col='mediumaquamarine')
 hist(log(CBCP$los), col='mediumaquamarine')
+#llos<-data.frame(log(CBCP$los))
+#ll<-sample(llos, 500, replace=FALSE)
+#shapiro.test(ll) 
 
 # SHOULD WE DO A LOG TRANSFORMATION? OR SHOULD WE EVEN INCLUDE THIS IN OUR MODEL
+# WE SHOULD DO A SHAPIRO TEST TO MAKE SURE IT'S NORMAL IF WE DO THAT?
 ```
 EDA on comorbidities and outcome measures
 ```{r}
