@@ -2,7 +2,9 @@
 title: "Final Consulting Code"
 author: "Michelle Nesbit"
 date: "2022-12-05"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 We import and explore the first dataset. There are 61 columns and 1704 rows. 4 columns (2, 12, 22, 50)  are empty. They are just column subsection titles: DEMOGRAPHICS, INFO.ABOUT.SURGERY, CO.MORBIDITIES....COVID.STATUS. so we will remove them. Noticing tail of dataset has 7 rows containing summary information and not unique observations. We will remove those rows.
 ```{r}
@@ -19,6 +21,25 @@ med1<-med1[-c(7,8)]
 # There will correlation between date of birth and age so we remove date of birth from dataset.
 med1<-med1[-2]
 # There will be correlation between length of stay and admission, surgery, and discharge dates. 
+datescor<-data.frame(med1[c(12:15)])
+datescor$surgery_date <- gsub(x=datescor$surgery_date,pattern=" 0:00",replacement="",fixed=T)
+datescor$surgery_date <- strptime(as.character(datescor$surgery_date), "%m/%d/%Y")
+datescor$surgery_date <- gsub(x=datescor$surgery_date,pattern="-",replacement="",fixed=T)
+
+datescor$admision_date <- gsub(x=datescor$admision_date,pattern=" 0:00",replacement="",fixed=T)
+datescor$admision_date <- strptime(as.character(datescor$admision_date), "%m/%d/%Y")
+datescor$admision_date <- gsub(x=datescor$admision_date,pattern="-",replacement="",fixed=T)
+
+datescor$discharge_date <- gsub(x=datescor$discharge_date,pattern=" 0:00",replacement="",fixed=T)
+datescor$discharge_date <- strptime(as.character(datescor$discharge_date), "%m/%d/%Y")
+datescor$discharge_date <- gsub(x=datescor$discharge_date,pattern="-",replacement="",fixed=T)
+
+datescor$surgery_date <-as.numeric(datescor$surgery_date)
+datescor$admision_date <-as.numeric(datescor$admision_date)
+datescor$discharge_date <-as.numeric(datescor$discharge_date)
+datescor$Length.of.Stay <-as.numeric(datescor$Length.of.Stay)
+
+cor(datescor, use = "complete.obs")
 # We notice there is no covid diagnosis date to analyze research question 2. 
 # Informed client and professor about this lack of data, and our decision to keep length of stay and omit other date variables. 
 
@@ -79,7 +100,7 @@ Dup<-(length(med2$mrn)-Uniq)
 Restructing surgery_date so we can pull earliest observation per client's instruction to deal with replicates
 ```{r}
 med2$surgery_date <- gsub(x=med2$surgery_date,pattern=" 0:00",replacement="",fixed=T)
-med2$surgery_date <- strptime(as.character(med$surgery_date), "%m/%d/%Y")
+med2$surgery_date <- strptime(as.character(med2$surgery_date), "%m/%d/%Y")
 med2$surgery_date <- gsub(x=med2$surgery_date,pattern="-",replacement="",fixed=T)
 # Earliest observation will now have the smallest surgery_date value code=surgery date=mrn
 library(tidyverse)
@@ -131,7 +152,7 @@ CBCP$ins[c(CBCP$ins=="Worker's Comp LUHS")]<-"Worker's Comp"
 ```
 
 ```{r}
-#table(CBCP$dis) # many similar levels are being collapsed
+table(CBCP$dis) # many similar levels are being collapsed
 CBCP$dis[c(CBCP$dis=="AGAINST MEDICAL ADVICE - HIM")]<-"Home"
 CBCP$dis[c(CBCP$dis=="AGAINST MEDICAL ADVICE WITH FORM SIGNED")]<-"Home"
 CBCP$dis[c(CBCP$dis=="AGAINST MEDICAL ADVICE WITHOUT FORM SIGNED")]<-"Home"
@@ -341,13 +362,11 @@ hist(CBCP$age, col='mediumaquamarine') # looks fairly normal
 hist(CBCP$bmi, col='mediumaquamarine') # slight right skew
 hist(CBCP$cpt, col='mediumaquamarine') # right skew with some obs around 30000
 hist(CBCP$los, col='mediumaquamarine')
-hist(log(CBCP$los), col='mediumaquamarine')
-#llos<-data.frame(log(CBCP$los))
-#ll<-sample(llos, 500, replace=FALSE)
-#shapiro.test(ll) 
+hist(log(CBCP$los), col='mediumaquamarine') #improved distribution with log transformation
 
-# SHOULD WE DO A LOG TRANSFORMATION? OR SHOULD WE EVEN INCLUDE THIS IN OUR MODEL
-# WE SHOULD DO A SHAPIRO TEST TO MAKE SURE IT'S NORMAL IF WE DO THAT?
+range(CBCP$bmi)
+range(CBCP$age)
+range(CBCP$los)
 ```
 EDA on comorbidities and outcome measures
 ```{r}
@@ -372,29 +391,57 @@ corrplot(cor(co),  method = "shade", tl.col = "black", type="upper", col.lim = c
 ```{r}
 library(ggplot2)
 plotdata<-data.frame(matrix(ncol=7, nrow=5157))
-x<-c("te", "covid_19", "dvt_hx", "PVD", "CHF", "CKD", "htn")
+x<-c("te", "covid_19", "dvt_hx", "pe_hx", "readmit_30d", "PVD", "factor_v")
 colnames(plotdata)<-x
 
 plotdata$te<-factor(CBCP$te, labels= c("No te", "Yes te"))
 plotdata$covid_19<-factor(CBCP$covid_19, labels= c("No covid", "Yes covid"))
 plotdata$dvt_hx<-factor(CBCP$dvt_hx, labels= c("No dvt_hx", "Yes dvt_hx"))
+plotdata$pe_hx<-factor(CBCP$pe_hx, labels= c("No pe_hx", "Yes pe_hx"))
+plotdata$readmit_30d<-factor(CBCP$readmit_30d, labels= c("No readmit_30d", "Yes readmit_30d"))
 plotdata$PVD<-factor(CBCP$PVD, labels= c("No PVD", "Yes PVD"))
-plotdata$CHF<-factor(CBCP$CHF, labels= c("No CHF", "Yes CHF"))
-plotdata$CKD<-factor(CBCP$CKD, labels= c("No CKD", "Yes CKD"))
-plotdata$htn<-factor(CBCP$htn, labels= c("No htn", "Yes htn"))  
+plotdata$factor_v<-factor(CBCP$factor_v, labels= c("No factor_v", "Yes factor_v"))
 
 ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cornflowerblue", stat="count") +
   facet_grid(dvt_hx ~ covid_19) + labs(title = "te by dvt_hx and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
 
 ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cyan4", stat="count") +
+  facet_grid(pe_hx ~ covid_19) + labs(title = "te by pe_hx and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+
+ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cornflowerblue", stat="count") +
+  facet_grid(readmit_30d ~ covid_19) + labs(title = "te by readmit_30d and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+
+ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cyan4", stat="count") +
   facet_grid(PVD ~ covid_19) + labs(title = "te by PVD and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
 
 ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cornflowerblue", stat="count") +
-  facet_grid(CHF ~ covid_19) + labs(title = "te by CHF and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+  facet_grid(factor_v ~ covid_19) + labs(title = "te by factor_v and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+```
 
-ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cyan4", stat="count") +
-  facet_grid(CKD ~ covid_19) + labs(title = "te by CKD and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+Removing cpt and make sure factors are coded as factors 1-6 16-37
+```{r}
+CBCP<-CBCP[-c(14)]
+names <- c(1:6,16:37)
+CBCP[,names] <- lapply(CBCP[,names] , factor)
 
-ggplot(plotdata, aes(x = te)) + geom_histogram(color = "white", fill = "cornflowerblue", stat="count") +
-  facet_grid(htn ~ covid_19) + labs(title = "te by htn and covid_19") +  theme(plot.title = element_text(hjust = 0.5)) + geom_text(stat='count', aes(group=te, label=..count.., y=..count..))
+library(dplyr)
+CBCP[ , 'mlt'] = NA
+CBCP$mlt[CBCP$pe == "0" & CBCP$dvt == "0" & CBCP$te == "0"]  <- "0"
+CBCP$mlt[CBCP$pe == "1" & CBCP$dvt == "0" & CBCP$te == "1"]  <- "1"
+CBCP$mlt[CBCP$pe == "0" & CBCP$dvt == "1" & CBCP$te == "1"]  <- "2"
+CBCP$mlt[CBCP$pe == "1" & CBCP$dvt == "1" & CBCP$te == "1"]  <- "3"
+
+table(CBCP$mlt)
+CBCP$mlt<-as.factor(CBCP$mlt)
+```
+
+Model Building
+```{r}
+library(VGAM)
+
+mltmod <- vglm(mlt~covid_19+pe_hx+dvt_hx+race+ethnicity+factor_v+readmit_30d+PVD+Hemiplegia+LiverDis+CHF, cv+CKD+htn, family = multinomial, data =CBCP)  # vglm = vector GLM
+summary(mltmod)
+
+temod <- glm(te~.-dvt-pe-mrn-mlt, data=CBCP, family = binomial(link = "logit"))
+summary(temod)
 ```
