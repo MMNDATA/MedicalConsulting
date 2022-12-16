@@ -1,6 +1,6 @@
 ---
 title: "Final Consulting Code"
-author: "Michelle Nesbit"
+author: "Michelle Nesbit and Nikhita Nalla"
 date: "2022-12-05"
 output:
   pdf_document: default
@@ -428,8 +428,8 @@ library(dplyr)
 CBCP[ , 'mlt'] = NA
 CBCP$mlt[CBCP$pe == "0" & CBCP$dvt == "0" & CBCP$te == "0"]  <- "0"
 CBCP$mlt[CBCP$pe == "1" & CBCP$dvt == "0" & CBCP$te == "1"]  <- "1"
-CBCP$mlt[CBCP$pe == "0" & CBCP$dvt == "1" & CBCP$te == "1"]  <- "2"
-CBCP$mlt[CBCP$pe == "1" & CBCP$dvt == "1" & CBCP$te == "1"]  <- "3"
+CBCP$mlt[CBCP$pe == "0" & CBCP$dvt == "1" & CBCP$te == "1"]  <- "1"
+CBCP$mlt[CBCP$pe == "1" & CBCP$dvt == "1" & CBCP$te == "1"]  <- "2"
 
 table(CBCP$mlt)
 CBCP$mlt<-as.factor(CBCP$mlt)
@@ -439,9 +439,46 @@ Model Building
 ```{r}
 library(VGAM)
 
-mltmod <- vglm(mlt~covid_19+pe_hx+dvt_hx+race+ethnicity+factor_v+readmit_30d+PVD+Hemiplegia+LiverDis+CHF, cv+CKD+htn, family = multinomial, data =CBCP)  # vglm = vector GLM
+mltmod <- vglm(mlt~los+ins+race+ethnicity+bmi+dis+AIDS+mal+cv+Hemiplegia+MI+ulcer+PVD+CKD+htn+alcohol+tobacco+factor_v+sickle_cell+Diabetes+dvt_hx+pe_hx+readmit_30d+ed_90d, family = multinomial, data =CBCP) 
 summary(mltmod)
 
-temod <- glm(te~.-dvt-pe-mrn-mlt, data=CBCP, family = binomial(link = "logit"))
-summary(temod)
+mltmod2 <- vglm(mlt~los+race+ethnicity+bmi+dis+mal+cv+MI+PVD+CKD+htn+tobacco+factor_v+Diabetes+dvt_hx+pe_hx+readmit_30d-1, family = multinomial, data =CBCP) 
+summary(mltmod2)
+```
+
+```{r}
+#Methods
+
+#Chi-Square Test
+#Expected values in all over 5
+chisq.test(CBCP$covid_19, CBCP$te)$expected
+
+#Chi-sq tests Ho: variables are independent. We can now reject null hypothesis for te.
+chisq.test(CBCP$covid_19, CBCP$te)
+
+#Logistic Regression
+#using a subset of data without pe and dvt allows us to use glm, as they have been collapsed
+#into te
+covid.subset = subset(CBCP, select = -c(pe, dvt))
+log.fit <- glm(te ~., data = covid.subset, family = 'binomial')
+summary(log.fit)
+
+#testing for variance inflation factor
+library(car)
+vif(log.fit)
+
+#using a Lasso model
+library(glmnet)
+#matrix for model
+mat = model.matrix(te~., data = covid.subset)
+set.seed(1)
+#choosing model
+cv.outfull = cv.glmnet(mat,covid.clot1$te,alpha=1)
+bestlambdafull = cv.outfull$lambda.min
+bestlambdafull
+plot(cv.outfull)
+## [1] 0.002048002
+#best model
+best.model <- glmnet(mat, covid.clot$te, alpha = 1, lambda = bestlambdafull, intercept = TRUE)
+coef.glmnet(best.model)
 ```
