@@ -444,6 +444,13 @@ summary(mltmod)
 
 mltmod2 <- vglm(mlt~los+race+ethnicity+bmi+dis+mal+cv+MI+PVD+CKD+htn+tobacco+factor_v+Diabetes+dvt_hx+pe_hx+readmit_30d-1, family = multinomial, data =CBCP) 
 summary(mltmod2)
+
+mltmod3 <- vglm(mlt~covid_19+los+ins+race+ethnicity+bmi+dis+AIDS+mal+cv+Hemiplegia+MI+ulcer+PVD+CKD+htn+alcohol+tobacco+factor_v+sickle_cell+Diabetes+dvt_hx+pe_hx+readmit_30d+ed_90d, family = multinomial, data =CBCP) 
+summary(mltmod3)
+
+#NAs in intercept, ins, AIDS, Hemiplegia, Ulcer, Alcohol, sickle_cell, and ed_90d so removing them
+mltmod4 <- vglm(mlt~covid_19+los+race+ethnicity+bmi+dis+mal+cv+MI+PVD+CKD+htn+tobacco+factor_v+Diabetes+dvt_hx+pe_hx+readmit_30d, family = multinomial, data =CBCP) 
+summary(mltmod4)
 ```
 
 ```{r}
